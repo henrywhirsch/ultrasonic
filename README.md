@@ -1,2 +1,2 @@
 # ultrasonic
-Testing ultrasonic sensors
+Code for testing ultrasonic sensors for the 2026 Science Fair.
