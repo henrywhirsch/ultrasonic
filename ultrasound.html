@@ -1,0 +1,569 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Ultrasonic Henry</title>
+  <style>
+    :root{
+      --bg:#0f172a;
+      --panel:#111827;
+      --panel2:#1f2937;
+      --text:#e5e7eb;
+      --muted:#94a3b8;
+      --accent:#22d3ee;
+      --accent2:#a78bfa;
+      --good:#34d399;
+      --warn:#fbbf24;
+      --bad:#f87171;
+      --grid:#334155;
+      --line:#22d3ee;
+      --line2:#a78bfa;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: radial-gradient(circle at top, #111827 0%, #0f172a 55%, #020617 100%);
+      color: var(--text);
+    }
+
+    .wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    h1 {
+      margin: 0 0 6px 0;
+      font-size: 32px;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      margin-bottom: 18px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 16px;
+    }
+
+    .card {
+      background: linear-gradient(180deg, rgba(31,41,55,0.95), rgba(17,24,39,0.98));
+      border: 1px solid #243041;
+      border-radius: 18px;
+      padding: 16px;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.28);
+    }
+
+    .span-4 { grid-column: span 4; }
+    .span-8 { grid-column: span 8; }
+    .span-12 { grid-column: span 12; }
+
+    .metric-title {
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 6px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .metric-value {
+      font-size: 44px;
+      font-weight: bold;
+      line-height: 1;
+    }
+
+    .metric-unit {
+      color: var(--muted);
+      margin-top: 6px;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    button, input, select {
+      background: #0b1220;
+      color: var(--text);
+      border: 1px solid #324154;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 14px;
+    }
+
+    button {
+      cursor: pointer;
+      transition: transform 0.08s ease, background 0.15s ease;
+    }
+
+    button:hover {
+      background: #132033;
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--warn);
+      box-shadow: 0 0 10px rgba(251,191,36,0.5);
+    }
+
+    .dot.ok {
+      background: var(--good);
+      box-shadow: 0 0 10px rgba(52,211,153,0.6);
+    }
+
+    .dot.bad {
+      background: var(--bad);
+      box-shadow: 0 0 10px rgba(248,113,113,0.6);
+    }
+
+    .small {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .chart-wrap {
+      position: relative;
+      height: 360px;
+      margin-top: 8px;
+      border-radius: 14px;
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, rgba(34,211,238,0.06), rgba(167,139,250,0.03)),
+        #0b1220;
+      border: 1px solid #243041;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .legend {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .swatch {
+      width: 14px;
+      height: 4px;
+      border-radius: 999px;
+    }
+
+    .trend {
+      font-size: 18px;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+
+    .footer-stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 18px;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    @media (max-width: 900px) {
+      .span-4, .span-8, .span-12 { grid-column: span 12; }
+      .metric-value { font-size: 34px; }
+      .chart-wrap { height: 280px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Ultrasonic Henry Live Viewer</h1>
+    <div class="subtitle">Ultrasonic Sensor Visualizer</div>
+
+    <div class="grid">
+      <div class="card span-4">
+        <div class="metric-title">Current Distance</div>
+        <div class="metric-value"><span id="cmValue">--</span><span class="trend" id="trendArrow"></span></div>
+        <div class="metric-unit">centimeters</div>
+      </div>
+
+      <div class="card span-4">
+        <div class="metric-title">Current Distance</div>
+        <div class="metric-value" id="inValue">--</div>
+        <div class="metric-unit">inches</div>
+      </div>
+
+      <div class="card span-4">
+        <div class="metric-title">Raw ADC</div>
+        <div class="metric-value" id="adcValue">--</div>
+        <div class="metric-unit">analog reading</div>
+      </div>
+
+      <div class="card span-12">
+        <div class="controls">
+          <button id="toggleBtn">Pause</button>
+          <button id="clearBtn">Clear Chart</button>
+          <button id="readNowBtn">Read Now</button>
+
+          <label class="small">
+            Poll every
+            <input id="intervalMs" type="number" value="1000" min="200" step="100" style="width:90px;">
+            ms
+          </label>
+
+          <label class="small">
+            Max points
+            <input id="maxPoints" type="number" value="120" min="20" max="1000" step="10" style="width:90px;">
+          </label>
+
+          <label class="small">
+            Endpoint
+            <input id="endpoint" type="text" value="http://192.168.4.1/read" style="min-width:260px;">
+          </label>
+
+          <div class="status">
+            <span class="dot" id="statusDot"></span>
+            <span id="statusText">Waiting for first reading...</span>
+          </div>
+        </div>
+
+        <div class="chart-wrap">
+          <canvas id="chart"></canvas>
+        </div>
+
+        <div class="legend">
+          <div class="legend-item"><span class="swatch" style="background: var(--line);"></span> Centimeters</div>
+          <div class="legend-item"><span class="swatch" style="background: var(--line2);"></span> Inches</div>
+        </div>
+
+        <div class="footer-stats">
+          <span class="pill">Min cm: <span id="minCm">--</span></span>
+          <span class="pill">Max cm: <span id="maxCm">--</span></span>
+          <span class="pill">Avg cm: <span id="avgCm">--</span></span>
+          <span class="pill">Samples: <span id="sampleCount">0</span></span>
+          <span class="pill">Last update: <span id="lastUpdate">--</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const cmValue = document.getElementById("cmValue");
+    const inValue = document.getElementById("inValue");
+    const adcValue = document.getElementById("adcValue");
+    const trendArrow = document.getElementById("trendArrow");
+
+    const toggleBtn = document.getElementById("toggleBtn");
+    const clearBtn = document.getElementById("clearBtn");
+    const readNowBtn = document.getElementById("readNowBtn");
+    const intervalMsInput = document.getElementById("intervalMs");
+    const maxPointsInput = document.getElementById("maxPoints");
+    const endpointInput = document.getElementById("endpoint");
+
+    const statusDot = document.getElementById("statusDot");
+    const statusText = document.getElementById("statusText");
+
+    const minCmEl = document.getElementById("minCm");
+    const maxCmEl = document.getElementById("maxCm");
+    const avgCmEl = document.getElementById("avgCm");
+    const sampleCountEl = document.getElementById("sampleCount");
+    const lastUpdateEl = document.getElementById("lastUpdate");
+
+    const canvas = document.getElementById("chart");
+    const ctx = canvas.getContext("2d");
+
+    let timer = null;
+    let paused = false;
+    let points = [];
+    let lastCm = null;
+
+    function resizeCanvas() {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = Math.floor(rect.width * dpr);
+      canvas.height = Math.floor(rect.height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      drawChart();
+    }
+
+    window.addEventListener("resize", resizeCanvas);
+
+    function formatTime(d) {
+      return d.toLocaleTimeString();
+    }
+
+    function setStatus(text, mode) {
+      statusText.textContent = text;
+      statusDot.className = "dot";
+      if (mode === "ok") statusDot.classList.add("ok");
+      if (mode === "bad") statusDot.classList.add("bad");
+    }
+
+    function addPoint(data) {
+      points.push({
+        t: new Date(),
+        cm: Number(data.cm),
+        inches: Number(data.inches),
+        adc: Number(data.adc)
+      });
+
+      const maxPoints = Math.max(20, parseInt(maxPointsInput.value || "120", 10));
+      while (points.length > maxPoints) {
+        points.shift();
+      }
+
+      updateStats();
+      drawChart();
+    }
+
+    function updateStats() {
+      if (!points.length) {
+        minCmEl.textContent = "--";
+        maxCmEl.textContent = "--";
+        avgCmEl.textContent = "--";
+        sampleCountEl.textContent = "0";
+        lastUpdateEl.textContent = "--";
+        return;
+      }
+
+      const cms = points.map(p => p.cm);
+      const min = Math.min(...cms);
+      const max = Math.max(...cms);
+      const avg = cms.reduce((a, b) => a + b, 0) / cms.length;
+
+      minCmEl.textContent = min.toFixed(1);
+      maxCmEl.textContent = max.toFixed(1);
+      avgCmEl.textContent = avg.toFixed(1);
+      sampleCountEl.textContent = String(points.length);
+      lastUpdateEl.textContent = formatTime(points[points.length - 1].t);
+    }
+
+    function updateCurrent(data) {
+      cmValue.textContent = Number(data.cm).toFixed(1);
+      inValue.textContent = Number(data.inches).toFixed(1);
+      adcValue.textContent = String(data.adc);
+
+      const currentCm = Number(data.cm);
+
+      if (lastCm === null) {
+        trendArrow.textContent = "";
+      } else if (currentCm > lastCm + 0.2) {
+        trendArrow.textContent = "⬆";
+      } else if (currentCm < lastCm - 0.2) {
+        trendArrow.textContent = "⬇";
+      } else {
+        trendArrow.textContent = "⟷";
+      }
+
+      lastCm = currentCm;
+    }
+
+    async function fetchReading() {
+      const endpoint = endpointInput.value.trim();
+      if (!endpoint) {
+        setStatus("No endpoint specified.", "bad");
+        return;
+      }
+
+      try {
+        setStatus("Reading...", "");
+        const response = await fetch(endpoint, { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error("HTTP " + response.status);
+        }
+
+        const data = await response.json();
+        updateCurrent(data);
+        addPoint(data);
+        setStatus("Connected and receiving data.", "ok");
+      } catch (err) {
+        setStatus("Read failed: " + err.message, "bad");
+      }
+    }
+
+    function startTimer() {
+      stopTimer();
+      const interval = Math.max(200, parseInt(intervalMsInput.value || "1000", 10));
+      timer = setInterval(() => {
+        if (!paused) {
+          fetchReading();
+        }
+      }, interval);
+    }
+
+    function stopTimer() {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+    }
+
+    function clearChart() {
+      points = [];
+      lastCm = null;
+      cmValue.textContent = "--";
+      inValue.textContent = "--";
+      adcValue.textContent = "--";
+      trendArrow.textContent = "";
+      updateStats();
+      drawChart();
+      setStatus("Chart cleared.", "");
+    }
+
+    function drawGrid(w, h, pad) {
+      ctx.strokeStyle = "#334155";
+      ctx.lineWidth = 1;
+
+      const rows = 5;
+      const cols = 8;
+
+      for (let i = 0; i <= rows; i++) {
+        const y = pad + ((h - pad * 2) * i / rows);
+        ctx.beginPath();
+        ctx.moveTo(pad, y);
+        ctx.lineTo(w - pad, y);
+        ctx.stroke();
+      }
+
+      for (let i = 0; i <= cols; i++) {
+        const x = pad + ((w - pad * 2) * i / cols);
+        ctx.beginPath();
+        ctx.moveTo(x, pad);
+        ctx.lineTo(x, h - pad);
+        ctx.stroke();
+      }
+    }
+
+    function drawLine(series, color, minVal, maxVal, w, h, pad) {
+      if (series.length < 1) return;
+
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+
+      for (let i = 0; i < series.length; i++) {
+        const x = pad + ((w - pad * 2) * i / Math.max(1, series.length - 1));
+        const y = h - pad - ((series[i] - minVal) / Math.max(0.0001, maxVal - minVal)) * (h - pad * 2);
+
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+
+      ctx.stroke();
+
+      const last = series[series.length - 1];
+      const lx = pad + ((w - pad * 2) * (series.length - 1) / Math.max(1, series.length - 1));
+      const ly = h - pad - ((last - minVal) / Math.max(0.0001, maxVal - minVal)) * (h - pad * 2);
+
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(lx, ly, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function drawLabels(minVal, maxVal, w, h, pad) {
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "12px Arial";
+
+      ctx.textAlign = "left";
+      ctx.fillText(maxVal.toFixed(1), 8, pad + 4);
+      ctx.fillText(minVal.toFixed(1), 8, h - pad + 4);
+
+      if (points.length) {
+        ctx.textAlign = "right";
+        ctx.fillText(points[0].t.toLocaleTimeString(), w - 140, h - 10);
+        ctx.fillText(points[points.length - 1].t.toLocaleTimeString(), w - 8, h - 10);
+      }
+    }
+
+    function drawChart() {
+      const rect = canvas.getBoundingClientRect();
+      const w = rect.width;
+      const h = rect.height;
+      const pad = 28;
+
+      ctx.clearRect(0, 0, w, h);
+      drawGrid(w, h, pad);
+
+      if (!points.length) {
+        ctx.fillStyle = "#94a3b8";
+        ctx.font = "16px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("No data yet. Click Read Now or wait for timer.", w / 2, h / 2);
+        return;
+      }
+
+      const cms = points.map(p => p.cm);
+      const inches = points.map(p => p.inches);
+
+      let minVal = Math.min(...cms, ...inches);
+      let maxVal = Math.max(...cms, ...inches);
+
+      if (Math.abs(maxVal - minVal) < 1) {
+        maxVal += 0.5;
+        minVal -= 0.5;
+      }
+
+      const padding = (maxVal - minVal) * 0.12;
+      minVal -= padding;
+      maxVal += padding;
+
+      drawLine(cms, "#22d3ee", minVal, maxVal, w, h, pad);
+      drawLine(inches, "#a78bfa", minVal, maxVal, w, h, pad);
+      drawLabels(minVal, maxVal, w, h, pad);
+    }
+
+    toggleBtn.addEventListener("click", () => {
+      paused = !paused;
+      toggleBtn.textContent = paused ? "Resume" : "Pause";
+      setStatus(paused ? "Polling paused." : "Polling resumed.", paused ? "" : "ok");
+    });
+
+    clearBtn.addEventListener("click", clearChart);
+    readNowBtn.addEventListener("click", fetchReading);
+
+    intervalMsInput.addEventListener("change", startTimer);
+    maxPointsInput.addEventListener("change", drawChart);
+
+    resizeCanvas();
+    startTimer();
+    fetchReading();
+  </script>
+</body>
+</html>
