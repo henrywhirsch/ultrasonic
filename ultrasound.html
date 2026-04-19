@@ -107,6 +107,11 @@
       background: #132033;
     }
 
+    #saveBtn {
+      border-color: var(--good);
+      color: var(--good);
+    }
+
     button:active {
       transform: translateY(1px);
     }
@@ -204,6 +209,39 @@
       border: 1px solid rgba(255,255,255,0.08);
     }
 
+    .data-grid-container {
+      margin-top: 20px;
+      max-height: 200px;
+      overflow-y: auto;
+      border: 1px solid #243041;
+      border-radius: 12px;
+      background: #0b1220;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      text-align: left;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      background: var(--panel2);
+      padding: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      font-size: 11px;
+    }
+
+    td {
+      padding: 8px 10px;
+      border-bottom: 1px solid #1f2937;
+    }
+
+    tr:hover { background: rgba(255,255,255,0.03); }
+
     @media (max-width: 900px) {
       .span-4, .span-8, .span-12 { grid-column: span 12; }
       .metric-value { font-size: 34px; }
@@ -213,8 +251,8 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>Ultrasonic Henry Live Viewer</h1>
-    <div class="subtitle">Ultrasonic Sensor Visualizer</div>
+    <h1>Ultrasonic Sonar</h1>
+    <div class="subtitle">HWH Grade 2</div>
 
     <div class="grid">
       <div class="card span-4">
@@ -240,16 +278,27 @@
           <button id="toggleBtn">Pause</button>
           <button id="clearBtn">Clear Chart</button>
           <button id="readNowBtn">Read Now</button>
+          <button id="saveBtn">Save to CSV</button>
 
           <label class="small">
-            Poll every
-            <input id="intervalMs" type="number" value="1000" min="200" step="100" style="width:90px;">
-            ms
+            Filename
+            <input id="fileName" type="text" value="sensor_export" style="width:130px;">
+          </label>
+
+          <label class="small">
+            Pause After (samples)
+            <input id="sampleLimit" type="number" value="100" min="0" style="width:70px;">
+            <span style="font-size: 10px; opacity: 0.7">(0 = unlimited)</span>
+          </label>
+
+          <label class="small">
+            Poll (ms)
+            <input id="intervalMs" type="number" value="1000" min="200" step="100" style="width:80px;">
           </label>
 
           <label class="small">
             Max points
-            <input id="maxPoints" type="number" value="120" min="20" max="1000" step="10" style="width:90px;">
+            <input id="maxPoints" type="number" value="120" min="20" max="1000" step="10" style="width:70px;">
           </label>
 
           <label class="small">
@@ -279,6 +328,19 @@
           <span class="pill">Samples: <span id="sampleCount">0</span></span>
           <span class="pill">Last update: <span id="lastUpdate">--</span></span>
         </div>
+
+        <div class="data-grid-container">
+          <table id="dataTable">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Distance (cm)</th>
+                <th>ADC</th>
+              </tr>
+            </thead>
+            <tbody id="dataBody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
@@ -292,9 +354,13 @@
     const toggleBtn = document.getElementById("toggleBtn");
     const clearBtn = document.getElementById("clearBtn");
     const readNowBtn = document.getElementById("readNowBtn");
+    const saveBtn = document.getElementById("saveBtn");
     const intervalMsInput = document.getElementById("intervalMs");
     const maxPointsInput = document.getElementById("maxPoints");
     const endpointInput = document.getElementById("endpoint");
+    const fileNameInput = document.getElementById("fileName");
+    const sampleLimitInput = document.getElementById("sampleLimit");
+    const dataBody = document.getElementById("dataBody");
 
     const statusDot = document.getElementById("statusDot");
     const statusText = document.getElementById("statusText");
@@ -312,6 +378,7 @@
     let paused = false;
     let points = [];
     let lastCm = null;
+    let sessionSampleCount = 0; // Reset when resumed or cleared
 
     function resizeCanvas() {
       const dpr = window.devicePixelRatio || 1;
@@ -343,12 +410,23 @@
         adc: Number(data.adc)
       });
 
+      sessionSampleCount++;
+
+      // Check Sample Limit
+      const limit = parseInt(sampleLimitInput.value || "0", 10);
+      if (limit > 0 && sessionSampleCount >= limit) {
+        paused = true;
+        toggleBtn.textContent = "Resume";
+        setStatus(`Limit reached (${limit} samples). Paused.`, "warn");
+      }
+
       const maxPoints = Math.max(20, parseInt(maxPointsInput.value || "120", 10));
       while (points.length > maxPoints) {
         points.shift();
       }
 
       updateStats();
+      updateGrid();
       drawChart();
     }
 
@@ -372,6 +450,41 @@
       avgCmEl.textContent = avg.toFixed(1);
       sampleCountEl.textContent = String(points.length);
       lastUpdateEl.textContent = formatTime(points[points.length - 1].t);
+    }
+
+    function updateGrid() {
+      dataBody.innerHTML = points.slice().reverse().map(p => `
+        <tr>
+          <td>${formatTime(p.t)}</td>
+          <td style="color:var(--accent)">${p.cm.toFixed(1)}</td>
+          <td>${p.adc}</td>
+        </tr>
+      `).join('');
+    }
+
+    function exportToCSV() {
+      if (points.length === 0) return alert("No data to export.");
+      
+      const headers = ["Timestamp", "CM", "ADC"];
+      const rows = points.map(p => [
+        p.t.toISOString(),
+        p.cm,
+        p.adc
+      ]);
+
+      const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      
+      const userFileName = (fileNameInput.value.trim() || "sensor_data") + ".csv";
+      
+      link.setAttribute("href", url);
+      link.setAttribute("download", userFileName);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
 
     function updateCurrent(data) {
@@ -411,7 +524,10 @@
         const data = await response.json();
         updateCurrent(data);
         addPoint(data);
-        setStatus("Connected and receiving data.", "ok");
+        // Only override status if we didn't just pause due to sample limit
+        if (!paused) {
+          setStatus("Connected and receiving data.", "ok");
+        }
       } catch (err) {
         setStatus("Read failed: " + err.message, "bad");
       }
@@ -437,13 +553,15 @@
     function clearChart() {
       points = [];
       lastCm = null;
+      sessionSampleCount = 0;
       cmValue.textContent = "--";
       inValue.textContent = "--";
       adcValue.textContent = "--";
       trendArrow.textContent = "";
       updateStats();
+      updateGrid();
       drawChart();
-      setStatus("Chart cleared.", "");
+      setStatus("Chart and session count cleared.", "");
     }
 
     function drawGrid(w, h, pad) {
@@ -551,12 +669,14 @@
 
     toggleBtn.addEventListener("click", () => {
       paused = !paused;
+      if (!paused) sessionSampleCount = 0; // Reset session counter when resuming manually
       toggleBtn.textContent = paused ? "Resume" : "Pause";
       setStatus(paused ? "Polling paused." : "Polling resumed.", paused ? "" : "ok");
     });
 
     clearBtn.addEventListener("click", clearChart);
     readNowBtn.addEventListener("click", fetchReading);
+    saveBtn.addEventListener("click", exportToCSV);
 
     intervalMsInput.addEventListener("change", startTimer);
     maxPointsInput.addEventListener("change", drawChart);
